@@ -8,8 +8,7 @@ On this video:
 
 https://www.youtube.com/watch?v=ahvqPh8dJ8s
 
-
-[![asciicast](https://asciinema.org/a/ca45P50bJAs12wbVEcG9xHguy.png)](https://asciinema.org/a/ca45P50bJAs12wbVEcG9xHguy)
+[![asciicast](https://asciinema.org/a/ca45P50bJAs12wbVEcG9xHguy.svg)](https://asciinema.org/a/ca45P50bJAs12wbVEcG9xHguy)
 
 ### How to Use
 
