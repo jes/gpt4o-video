@@ -7,7 +7,7 @@ if ! command -v ffmpeg &> /dev/null; then
 fi
 
 # Default values
-FPS=2
+FPS=1
 OUTPUT_SIZE="512:512"
 
 # Function to display usage

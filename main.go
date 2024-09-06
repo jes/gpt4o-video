@@ -76,8 +76,20 @@ func loadImagesFromDirectory(dirPath string) ([]openai.ChatMessagePart, error) {
 func interactiveQA(images []openai.ChatMessagePart, client *openai.Client) error {
 	reader := bufio.NewReader(os.Stdin)
 
+	// Initialize the dialogue with the images
+	dialogue := []openai.ChatCompletionMessage{
+		{
+			Role:         openai.ChatMessageRoleUser,
+			MultiContent: images,
+		},
+		{
+			Role:    openai.ChatMessageRoleSystem,
+			Content: "The images you are seeing represent frames from a video.",
+		},
+	}
+
 	for {
-		fmt.Print("Enter your question (or 'quit' to exit): ")
+		fmt.Print("> ")
 		question, _ := reader.ReadString('\n')
 		question = strings.TrimSpace(question)
 
@@ -85,23 +97,17 @@ func interactiveQA(images []openai.ChatMessagePart, client *openai.Client) error
 			break
 		}
 
-		messages := []openai.ChatCompletionMessage{
-			{
-				Role: openai.ChatMessageRoleUser,
-				MultiContent: append([]openai.ChatMessagePart{
-					{
-						Type: openai.ChatMessagePartTypeText,
-						Text: question,
-					},
-				}, images...),
-			},
-		}
+		// Append the user's question to the dialogue
+		dialogue = append(dialogue, openai.ChatCompletionMessage{
+			Role:    openai.ChatMessageRoleUser,
+			Content: question,
+		})
 
 		resp, err := client.CreateChatCompletion(
 			context.Background(),
 			openai.ChatCompletionRequest{
 				Model:     "gpt-4o",
-				Messages:  messages,
+				Messages:  dialogue,
 				MaxTokens: 300,
 			},
 		)
@@ -110,7 +116,10 @@ func interactiveQA(images []openai.ChatMessagePart, client *openai.Client) error
 			return fmt.Errorf("error calling GPT-4 Vision API: %v", err)
 		}
 
-		fmt.Printf("AI: %s\n\n", resp.Choices[0].Message.Content)
+		// Append the assistant's response to the dialogue
+		dialogue = append(dialogue, resp.Choices[0].Message)
+
+		fmt.Printf("%s\n\n", resp.Choices[0].Message.Content)
 	}
 
 	return nil
