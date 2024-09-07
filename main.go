@@ -140,7 +140,7 @@ func extractTimestampFromFilename(filename string, fps float64) string {
 		return ""
 	}
 	seconds := float64(frameNum) / fps
-	return fmt.Sprintf("Timestamp: %02d:%02d", int(seconds)/60, int(seconds)%60)
+	return fmt.Sprintf("[%02d:%02d]", int(seconds)/60, int(seconds)%60)
 }
 
 func interactiveQA(messages []openai.ChatCompletionMessage, client *openai.Client) error {
@@ -229,7 +229,6 @@ func fileQA(messages []openai.ChatCompletionMessage, client *openai.Client, prom
 		return fmt.Errorf("error calling GPT-4 Vision API: %v", err)
 	}
 
-	dialogue = append(dialogue, resp.Choices[0].Message)
 	fmt.Printf("%s\n\n", resp.Choices[0].Message.Content)
 
 	return nil
