@@ -5,22 +5,32 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/sashabaranov/go-openai"
 )
 
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: go run main.go <directory_path>")
+	if len(os.Args) < 3 {
+		fmt.Println("Usage: go run main.go <video_path> <fps>\nfps is optional, default is 1")
 		return
 	}
 
-	dirPath := os.Args[1]
+	videoPath := os.Args[1]
+	fps := 1.0 // Default FPS
+	if len(os.Args) > 2 {
+		var err error
+		fps, err = strconv.ParseFloat(os.Args[2], 64)
+		if err != nil {
+			log.Fatal("Invalid FPS value")
+		}
+	}
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	if apiKey == "" {
 		log.Fatal("OPENAI_API_KEY environment variable is not set")
@@ -28,27 +38,57 @@ func main() {
 
 	client := openai.NewClient(apiKey)
 
-	images, err := loadImagesFromDirectory(dirPath)
+	fmt.Printf("Splitting video into frames at %f fps...\n", fps)
+	framesDir, err := splitVideoIntoFrames(videoPath, fps)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer os.RemoveAll(framesDir) // Ensure the temporary directory is deleted
+
+	fmt.Println("Loading images from directory...")
+	messages, err := loadImagesFromDirectory(framesDir, fps)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if len(images) == 0 {
+	if len(messages) == 0 {
 		log.Fatal("No PNG images found in the specified directory")
 	}
 
-	fmt.Printf("Loaded %d PNG images\n", len(images))
+	fmt.Printf("Loaded %d PNG images\n", len(messages))
 
-	err = interactiveQA(images, client)
+	err = interactiveQA(messages, client)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// Unlink the temporary frames directory
+	err = os.RemoveAll(framesDir)
+	if err != nil {
+		log.Printf("Warning: Failed to remove temporary directory %s: %v", framesDir, err)
+	}
 }
 
-func loadImagesFromDirectory(dirPath string) ([]openai.ChatMessagePart, error) {
-	var images []openai.ChatMessagePart
+func splitVideoIntoFrames(videoPath string, fps float64) (string, error) {
+	framesDir, err := os.MkdirTemp("", "frames")
+	if err != nil {
+		return "", fmt.Errorf("error creating temporary frames directory: %v", err)
+	}
 
-	files, err := ioutil.ReadDir(dirPath)
+	fpsString := fmt.Sprintf("%f", fps)
+	cmd := exec.Command("ffmpeg", "-i", videoPath, "-vf", fmt.Sprintf("fps=%s", fpsString), filepath.Join(framesDir, "frame_%04d.png"))
+	err = cmd.Run()
+	if err != nil {
+		return "", fmt.Errorf("error splitting video into frames: %v", err)
+	}
+
+	return framesDir, nil
+}
+
+func loadImagesFromDirectory(dirPath string, fps float64) ([]openai.ChatCompletionMessage, error) {
+	var messages []openai.ChatCompletionMessage
+
+	files, err := os.ReadDir(dirPath)
 	if err != nil {
 		return nil, fmt.Errorf("error reading directory: %v", err)
 	}
@@ -56,41 +96,61 @@ func loadImagesFromDirectory(dirPath string) ([]openai.ChatMessagePart, error) {
 	for _, file := range files {
 		if !file.IsDir() && strings.ToLower(filepath.Ext(file.Name())) == ".png" {
 			imagePath := filepath.Join(dirPath, file.Name())
-			imageData, err := ioutil.ReadFile(imagePath)
+			imageData, err := os.ReadFile(imagePath)
 			if err != nil {
 				return nil, fmt.Errorf("error reading image file %s: %v", imagePath, err)
 			}
 
-			images = append(images, openai.ChatMessagePart{
-				Type: openai.ChatMessagePartTypeImageURL,
-				ImageURL: &openai.ChatMessageImageURL{
-					URL: "data:image/png;base64," + base64.StdEncoding.EncodeToString(imageData),
-				},
+			timestamp := extractTimestampFromFilename(file.Name(), fps)
+
+			messages = append(messages, openai.ChatCompletionMessage{
+				Role:    openai.ChatMessageRoleUser,
+				Content: "data:image/png;base64," + base64.StdEncoding.EncodeToString(imageData),
+			}, openai.ChatCompletionMessage{
+				Role:    openai.ChatMessageRoleUser,
+				Content: timestamp,
 			})
 		}
 	}
 
-	return images, nil
+	return messages, nil
 }
 
-func interactiveQA(images []openai.ChatMessagePart, client *openai.Client) error {
+func extractTimestampFromFilename(filename string, fps float64) string {
+	// Assuming filename format is frame_XXXX.png
+	parts := strings.Split(filename, "_")
+	if len(parts) < 2 {
+		return ""
+	}
+	frameNumber := strings.TrimSuffix(parts[1], ".png")
+	frameNum, err := strconv.Atoi(frameNumber)
+	if err != nil {
+		return ""
+	}
+	seconds := float64(frameNum) / fps
+	return fmt.Sprintf("Timestamp: %02d:%02d", int(seconds)/60, int(seconds)%60)
+}
+
+func interactiveQA(messages []openai.ChatCompletionMessage, client *openai.Client) error {
 	reader := bufio.NewReader(os.Stdin)
 
-	// Initialize the dialogue with the images
-	dialogue := []openai.ChatCompletionMessage{
-		{
-			Role:         openai.ChatMessageRoleUser,
-			MultiContent: images,
-		},
+	// Initialize the dialogue with the images and timestamps
+	dialogue := append([]openai.ChatCompletionMessage{
 		{
 			Role:    openai.ChatMessageRoleSystem,
 			Content: "The images you are seeing represent frames from a video.",
 		},
-	}
+	}, messages...)
 
 	for {
 		fmt.Print("> ")
-		question, _ := reader.ReadString('\n')
+		question, err := reader.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return fmt.Errorf("error reading input: %v", err)
+		}
 		question = strings.TrimSpace(question)
 
 		if strings.ToLower(question) == "quit" {
