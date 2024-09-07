@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/base64"
+	"flag" // Added flag package
 	"fmt"
 	"io"
 	"log"
@@ -17,20 +18,18 @@ import (
 )
 
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: go run main.go <video_path> <fps>\nfps is optional, default is 1")
+	// Define flags
+	videoPath := flag.String("video", "", "Path to the video file")
+	fps := flag.Float64("fps", 1.0, "Frames per second (default is 1)")
+	promptFile := flag.String("prompt", "", "Path to the prompt file (optional)")
+
+	flag.Parse()
+
+	if *videoPath == "" {
+		fmt.Println("Usage: go run main.go -video <video_path> -fps <fps> -prompt <prompt_file>")
 		return
 	}
 
-	videoPath := os.Args[1]
-	fps := 1.0 // Default FPS
-	if len(os.Args) > 2 {
-		var err error
-		fps, err = strconv.ParseFloat(os.Args[2], 64)
-		if err != nil {
-			log.Fatal("Invalid FPS value")
-		}
-	}
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	if apiKey == "" {
 		log.Fatal("OPENAI_API_KEY environment variable is not set")
@@ -38,15 +37,15 @@ func main() {
 
 	client := openai.NewClient(apiKey)
 
-	fmt.Printf("Splitting video into frames at %f fps...\n", fps)
-	framesDir, err := splitVideoIntoFrames(videoPath, fps)
+	fmt.Fprintf(os.Stderr, "Splitting video into frames at %f fps...\n", *fps)
+	framesDir, err := splitVideoIntoFrames(*videoPath, *fps)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer os.RemoveAll(framesDir) // Ensure the temporary directory is deleted
 
-	fmt.Println("Loading images from directory...")
-	messages, err := loadImagesFromDirectory(framesDir, fps)
+	fmt.Fprintln(os.Stderr, "Loading images from directory...")
+	messages, err := loadImagesFromDirectory(framesDir, *fps)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -55,9 +54,13 @@ func main() {
 		log.Fatal("No PNG images found in the specified directory")
 	}
 
-	fmt.Printf("Loaded %d PNG images\n", len(messages)/2)
+	fmt.Fprintf(os.Stderr, "Loaded %d PNG images\n", len(messages)/2)
 
-	err = interactiveQA(messages, client)
+	if *promptFile != "" {
+		err = fileQA(messages, client, *promptFile)
+	} else {
+		err = interactiveQA(messages, client)
+	}
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -190,6 +193,44 @@ func interactiveQA(messages []openai.ChatCompletionMessage, client *openai.Clien
 
 		fmt.Printf("%s\n\n", resp.Choices[0].Message.Content)
 	}
+
+	return nil
+}
+
+func fileQA(messages []openai.ChatCompletionMessage, client *openai.Client, promptFile string) error {
+	file, err := os.ReadFile(promptFile)
+	if err != nil {
+		return fmt.Errorf("error opening prompt file: %v", err)
+	}
+	prompt := string(file)
+
+	dialogue := append([]openai.ChatCompletionMessage{
+		{
+			Role:    openai.ChatMessageRoleSystem,
+			Content: "The images you are seeing represent frames from a video.",
+		},
+	}, messages...)
+
+	dialogue = append(dialogue, openai.ChatCompletionMessage{
+		Role:    openai.ChatMessageRoleUser,
+		Content: prompt,
+	})
+
+	resp, err := client.CreateChatCompletion(
+		context.Background(),
+		openai.ChatCompletionRequest{
+			Model:     "gpt-4o",
+			Messages:  dialogue,
+			MaxTokens: 4096,
+		},
+	)
+
+	if err != nil {
+		return fmt.Errorf("error calling GPT-4 Vision API: %v", err)
+	}
+
+	dialogue = append(dialogue, resp.Choices[0].Message)
+	fmt.Printf("%s\n\n", resp.Choices[0].Message.Content)
 
 	return nil
 }
