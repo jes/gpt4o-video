@@ -25,6 +25,7 @@ get '/' => sub ($c) {
 post '/search' => sub ($c) {
     my $search_term = $c->param('search_term');
     my @results;
+    my %seen_videos;
 
     find(
         {
@@ -38,11 +39,13 @@ post '/search' => sub ($c) {
                         my $highlighted_line = $lines[$line_num];
                         $highlighted_line =~ s/($search_term)/<mark>$1<\/mark>/gi;
                         my ($video_key) = $file =~ m{analysis/(.+)\.txt};
+                        my $video_url = $video_mappings->{$video_key} // '';
                         push @results, {
                             file => $file,
                             line_num => $line_num + 1,
                             line => $highlighted_line,
-                            video_url => $video_mappings->{$video_key} // '',
+                            video_url => $video_url,
+                            show_video => !$seen_videos{$video_url}++,
                         };
                     }
                 }
@@ -66,7 +69,7 @@ __DATA__
     <title>Video Search</title>
     <style>
         .result { margin-bottom: 20px; }
-        .video-player { margin-top: 10px; }
+        .video-player { margin-bottom: 10px; }
         .suggested-search { cursor: pointer; color: blue; text-decoration: underline; margin-right: 10px; }
     </style>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -79,12 +82,12 @@ __DATA__
                     var resultsHtml = '';
                     data.forEach(function(result) {
                         resultsHtml += '<div class="result">';
-                        resultsHtml += '<p>' + result.file + ' (Line ' + result.line_num + '): ' + result.line + '</p>';
-                        if (result.video_url) {
+                        if (result.video_url && result.show_video) {
                             resultsHtml += '<div class="video-player">';
                             resultsHtml += '<iframe width="560" height="315" src="https://www.youtube.com/embed/' + result.video_url.split('v=')[1] + '" frameborder="0" allowfullscreen></iframe>';
                             resultsHtml += '</div>';
                         }
+                        resultsHtml += '<p>' + result.file + ' (Line ' + result.line_num + '): ' + result.line + '</p>';
                         resultsHtml += '</div>';
                     });
                     $('#results').html(resultsHtml);
@@ -102,12 +105,10 @@ __DATA__
 <body>
     <h1>Video Search</h1>
     <div>
-        <span class="suggested-search">toys</span>
+        <span class="suggested-search">bubble</span>
         <span class="suggested-search">programming</span>
-        <span class="suggested-search">lathe</span>
+        <span class="suggested-search">screws</span>
         <span class="suggested-search">terminal</span>
-        <span class="suggested-search">debugging</span>
-        <span class="suggested-search">ui</span>
     </div>
     <form id="search-form">
         <input type="text" id="search-term" name="search_term" placeholder="Enter search term">
