@@ -17,7 +17,7 @@ import (
 )
 
 func main() {
-	if len(os.Args) < 3 {
+	if len(os.Args) < 2 {
 		fmt.Println("Usage: go run main.go <video_path> <fps>\nfps is optional, default is 1")
 		return
 	}
@@ -55,7 +55,7 @@ func main() {
 		log.Fatal("No PNG images found in the specified directory")
 	}
 
-	fmt.Printf("Loaded %d PNG images\n", len(messages))
+	fmt.Printf("Loaded %d PNG images\n", len(messages)/2)
 
 	err = interactiveQA(messages, client)
 	if err != nil {
@@ -76,7 +76,8 @@ func splitVideoIntoFrames(videoPath string, fps float64) (string, error) {
 	}
 
 	fpsString := fmt.Sprintf("%f", fps)
-	cmd := exec.Command("ffmpeg", "-i", videoPath, "-vf", fmt.Sprintf("fps=%s", fpsString), filepath.Join(framesDir, "frame_%04d.png"))
+	outputSize := "512:512"
+	cmd := exec.Command("ffmpeg", "-i", videoPath, "-vf", fmt.Sprintf("fps=%s,scale=%s:force_original_aspect_ratio=decrease,pad=%s:(ow-iw)/2:(oh-ih)/2", fpsString, outputSize, outputSize), filepath.Join(framesDir, "frame_%04d.png"))
 	err = cmd.Run()
 	if err != nil {
 		return "", fmt.Errorf("error splitting video into frames: %v", err)
@@ -105,7 +106,15 @@ func loadImagesFromDirectory(dirPath string, fps float64) ([]openai.ChatCompleti
 
 			messages = append(messages, openai.ChatCompletionMessage{
 				Role:    openai.ChatMessageRoleUser,
-				Content: "data:image/png;base64," + base64.StdEncoding.EncodeToString(imageData),
+				Content: "",
+				MultiContent: []openai.ChatMessagePart{
+					{
+						Type: openai.ChatMessagePartTypeImageURL,
+						ImageURL: &openai.ChatMessageImageURL{
+							URL: "data:image/png;base64," + base64.StdEncoding.EncodeToString(imageData),
+						},
+					},
+				},
 			}, openai.ChatCompletionMessage{
 				Role:    openai.ChatMessageRoleUser,
 				Content: timestamp,
@@ -168,7 +177,7 @@ func interactiveQA(messages []openai.ChatCompletionMessage, client *openai.Clien
 			openai.ChatCompletionRequest{
 				Model:     "gpt-4o",
 				Messages:  dialogue,
-				MaxTokens: 300,
+				MaxTokens: 4096,
 			},
 		)
 
