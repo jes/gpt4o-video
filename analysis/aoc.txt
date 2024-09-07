@@ -1,0 +1,44 @@
+The video shows a screen recording of what appears to be someone solving a coding puzzle, along with a small window showing the person working on the task. The coding puzzle is related to a Rock-Paper-Scissors game, likely part of a competitive programming challenge or an educational exercise. Here is a detailed description of the content in the video, broken down by timestamps:
+
+### Initial Setup
+0:00 - The terminal displays output for a problem involving measurements. The user is running commands to fetch and solve problems. The lower section of the terminal displays commands being typed.
+
+### Rock, Paper, Scissors Game Explanation
+[00:45](00:45) - The problem description for a Rock-Paper-Scissors game is visible in the terminal, explaining the strategy and rules for the game. The user types the command to fetch the problem statement.
+
+[01:05](01:05) to [01:55](01:55) - Continuous scrolling and reading of the problem statement, which includes details about the game mechanics and scoring.
+
+### Fetching Input Data
+[02:50](02:50) - The user fetches input data with the command `aoc input 2022 2`.
+
+### Writing the Solution in Slang
+[03:00](03:00) to [04:45](04:45) - The user starts writing a script in a language called "Slang". The person creates a file named `part1.sl` and writes code to read input and compute the game's score. The person defines variables and functions and tests some initial logic.
+
+### Testing and Submitting Part 1 Solution
+[05:05](05:05) - The user attempts to run the script with the command `slangi part1.sl < input`, and checks the output.
+
+[05:25](05:25) - The user submits the solution using `aoc submit 2022 2 1 6366`, but it is indicated as incorrect.
+
+[05:35](05:35) to [05:55](05:55) - The user checks the input file length and attempts to correct the solution, continuing debugging and refining the code.
+
+[06:15](06:15) - The user successfully submits the corrected solution for Part 1: `aoc submit 2022 2 1 15572`.
+
+### Writing the Part 2 Solution
+[09:00](09:00) - The user fetches Part 2 of the problem and starts coding the solution in a new file `part2.sl`.
+
+[09:20](09:20) - The user refines the logic for determining the outcomes based on additional conditions introduced in Part 2.
+
+### Testing and Submitting Part 2 Solution
+[10:10](10:10) to [10:45](10:45) - The user tests the script with sample input and submits it using the command `aoc submit 2022 2 2 16098`.
+
+### Validation and Completion
+[10:55](10:55) - Upon successful submission, a notification confirms the completion of day 2 puzzle parts.
+
+### Context 
+The task is related to an Advent of Code (AoC) event, a series of daily programming puzzles in December. The user is likely participating in this challenge, working through the provided puzzles by writing and debugging code, testing it with sample input, and submitting the results.
+
+### Background Details
+In the background, the user’s room is visible with a computer setup, a whiteboard or chart on the wall, and some personal items, indicating a home or office environment where the person is engaged with coding activities. 
+
+The primary focus of the video is the coding and problem-solving process, including reading problem statements, writing script, debugging, and testing the code to ensure it meets the puzzle requirements.
+
