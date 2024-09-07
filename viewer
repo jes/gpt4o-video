@@ -141,22 +141,26 @@ __DATA__
                     // Initialize YouTube players
                     onYouTubeIframeAPIReady();
 
-                    // Start playing the first video from the timestamp of the first result
-                    if (Object.keys(data).length > 0) {
-                        var firstVideoUrl = Object.keys(data)[0];
-                        var firstMatch = data[firstVideoUrl][0];
-                        var firstTimestamp = firstMatch.line.match(/data-time="(\d+:\d+)"/)[1];
-                        var minutes = parseInt(firstTimestamp.split(':')[0]);
-                        var seconds = parseInt(firstTimestamp.split(':')[1]);
-                        var totalSeconds = minutes * 60 + seconds;
-                        var firstVideoId = firstVideoUrl.split('v=')[1];
-                        var firstVideoElementId = 'video-' + firstVideoId;
-                        var firstVideo = players[firstVideoElementId];
-                        if (firstVideo) {
-                            firstVideo.seekTo(totalSeconds, true);
-                            firstVideo.playVideo();
+                    // Wait for the player to load and then simulate clicking the first timestamp link
+                    setTimeout(function() {
+                        if (Object.keys(data).length > 0) {
+                            var firstVideoUrl = Object.keys(data)[0];
+                            var firstMatch = data[firstVideoUrl][0];
+                            var firstTimestamp = firstMatch.line.match(/data-time="(\d+:\d+)"/)[1];
+                            var minutes = parseInt(firstTimestamp.split(':')[0]);
+                            var seconds = parseInt(firstTimestamp.split(':')[1]);
+                            var totalSeconds = minutes * 60 + seconds;
+                            var firstVideoId = firstVideoUrl.split('v=')[1];
+                            var firstVideoElementId = 'video-' + firstVideoId;
+                            var firstVideo = players[firstVideoElementId];
+                            if (firstVideo) {
+                                firstVideo.seekTo(totalSeconds, true);
+                                firstVideo.playVideo();
+                            }
+                            // Simulate click on the first timestamp link
+                            $('.timestamp').first().click();
                         }
-                    }
+                    }, 1000); // Adjust the delay as needed
                 });
             });
 
@@ -171,7 +175,7 @@ __DATA__
                 var time = $(this).data('time');
                 var minutes = parseInt(time.split(':')[0]);
                 var seconds = parseInt(time.split(':')[1]);
-                var totalSeconds = minutes * 60 + seconds;
+                var totalSeconds = minutes * 60 + seconds - 1;
                 var video = $(this).closest('.result').find('iframe')[0];
                 var videoId = video.id;
                 var player = players[videoId];
@@ -188,7 +192,7 @@ __DATA__
     <p>Search through video transcripts and play the video from the timestamp of the result. Currently only has 4 videos and the search is with grep, not RAG.</p>
     <div>
     Examples:
-        <span class="suggested-search">toys</span>
+        <span class="suggested-search">chromatic</span>
         <span class="suggested-search">homeless</span>
         <span class="suggested-search">telescope</span>
         <span class="suggested-search">solution</span>
