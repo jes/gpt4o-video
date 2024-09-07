@@ -24,8 +24,7 @@ get '/' => sub ($c) {
 
 post '/search' => sub ($c) {
     my $search_term = $c->param('search_term');
-    my @results;
-    my %seen_videos;
+    my %results;
 
     find(
         {
@@ -38,14 +37,34 @@ post '/search' => sub ($c) {
                     if ($lines[$line_num] =~ /$search_term/i) {
                         my $highlighted_line = $lines[$line_num];
                         $highlighted_line =~ s/($search_term)/<mark>$1<\/mark>/gi;
+
+                        # Look for timestamp on the current line
+                        my $timestamp;
+                        if ($highlighted_line =~ /\[(\d+:\d+)\]/) {
+                            $timestamp = $1;
+                        } else {
+                            # Look backwards for the closest previous timestamp
+                            for (my $i = $line_num - 1; $i >= 0; $i--) {
+                                if ($lines[$i] =~ /\[(\d+:\d+)\]/) {
+                                    $timestamp = $1;
+                                    $highlighted_line = "[$timestamp] " . $highlighted_line;
+                                    last;
+                                }
+                            }
+                        }
+
+                        if (!$timestamp) {
+                            $highlighted_line = "[00:00] " . $highlighted_line;
+                        }
+
+                        $highlighted_line =~ s/\[(\d+:\d+)\]/<a href="#" class="timestamp" data-time="$1">[$1]<\/a>/g;
+
                         my ($video_key) = $file =~ m{analysis/(.+)\.txt};
-                        my $video_url = $video_mappings->{$video_key} // '';
-                        push @results, {
+                        my $video_url = $video_key ? "$video_key.mp4" : '';
+                        push @{$results{$video_url}}, {
                             file => $file,
                             line_num => $line_num + 1,
                             line => $highlighted_line,
-                            video_url => $video_url,
-                            show_video => !$seen_videos{$video_url}++,
                         };
                     }
                 }
@@ -55,7 +74,7 @@ post '/search' => sub ($c) {
         'analysis'
     );
 
-    $c->render(json => \@results);
+    $c->render(json => \%results);
 };
 
 app->start;
@@ -66,7 +85,7 @@ __DATA__
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Video Search</title>
+    <title>Video grep</title>
     <style>
         .result { margin-bottom: 20px; }
         .video-player { margin-bottom: 10px; }
@@ -80,17 +99,43 @@ __DATA__
                 var searchTerm = $('#search-term').val();
                 $.post('/search', {search_term: searchTerm}, function(data) {
                     var resultsHtml = '';
-                    data.forEach(function(result) {
-                        resultsHtml += '<div class="result">';
-                        if (result.video_url && result.show_video) {
-                            resultsHtml += '<div class="video-player">';
-                            resultsHtml += '<iframe width="560" height="315" src="https://www.youtube.com/embed/' + result.video_url.split('v=')[1] + '" frameborder="0" allowfullscreen></iframe>';
-                            resultsHtml += '</div>';
-                        }
-                        resultsHtml += '<p>' + result.file + ' (Line ' + result.line_num + '): ' + result.line + '</p>';
-                        resultsHtml += '</div>';
-                    });
+                    if (Object.keys(data).length === 0) {
+                        resultsHtml = '<p>No results for \'' + searchTerm + '\'</p>';
+                    } else {
+                        $.each(data, function(videoUrl, matches) {
+                            if (videoUrl) {
+                                var videoElementId = 'video-' + videoUrl.replace(/[^a-zA-Z0-9]/g, '_');
+                                resultsHtml += '<div class="result">';
+                                resultsHtml += '<div class="video-player">';
+                                resultsHtml += '<video id="' + videoElementId + '" width="560" height="315" controls>';
+                                resultsHtml += '<source src="' + videoUrl + '" type="video/mp4">';
+                                resultsHtml += 'Your browser does not support the video tag.';
+                                resultsHtml += '</video>';
+                                resultsHtml += '</div>';
+                                matches.forEach(function(match) {
+                                    resultsHtml += '<p>' + match.line + '</p>';
+                                });
+                                resultsHtml += '</div>';
+                            }
+                        });
+                    }
                     $('#results').html(resultsHtml);
+
+                    // Start playing the first video from the timestamp of the first result
+                    if (Object.keys(data).length > 0) {
+                        var firstVideoUrl = Object.keys(data)[0];
+                        var firstMatch = data[firstVideoUrl][0];
+                        var firstTimestamp = firstMatch.line.match(/data-time="(\d+:\d+)"/)[1];
+                        var minutes = parseInt(firstTimestamp.split(':')[0]);
+                        var seconds = parseInt(firstTimestamp.split(':')[1]);
+                        var totalSeconds = minutes * 60 + seconds;
+                        var firstVideoElementId = 'video-' + firstVideoUrl.replace(/[^a-zA-Z0-9]/g, '_');
+                        var firstVideo = document.getElementById(firstVideoElementId);
+                        if (firstVideo) {
+                            firstVideo.currentTime = totalSeconds - 1;
+                            firstVideo.play();
+                        }
+                    }
                 });
             });
 
@@ -99,17 +144,33 @@ __DATA__
                 $('#search-term').val(searchTerm);
                 $('#search-form').submit();
             });
+
+            $(document).on('click', '.timestamp', function(e) {
+                e.preventDefault();
+                var time = $(this).data('time');
+                var minutes = parseInt(time.split(':')[0]);
+                var seconds = parseInt(time.split(':')[1]);
+                var totalSeconds = minutes * 60 + seconds;
+                var video = $(this).closest('.result').find('video')[0];
+                if (video) {
+                    video.currentTime = totalSeconds - 0.5;
+                    video.play();
+                }
+            });
         });
     </script>
 </head>
 <body>
-    <h1>Video Search</h1>
+    <h1>Video grep</h1>
+    <p>Search through video transcripts and play the video from the timestamp of the result. Currently only has 4 videos and the search is with grep, not RAG.</p>
     <div>
-        <span class="suggested-search">bubble</span>
-        <span class="suggested-search">programming</span>
-        <span class="suggested-search">screws</span>
-        <span class="suggested-search">terminal</span>
+    Examples:
+        <span class="suggested-search">toys</span>
+        <span class="suggested-search">homeless</span>
+        <span class="suggested-search">telescope</span>
+        <span class="suggested-search">CLI</span>
     </div>
+    <br>
     <form id="search-form">
         <input type="text" id="search-term" name="search_term" placeholder="Enter search term">
         <input type="submit" value="Search">
