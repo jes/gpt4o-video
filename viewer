@@ -60,7 +60,7 @@ post '/search' => sub ($c) {
                         $highlighted_line =~ s/\[(\d+:\d+)\]/<a href="#" class="timestamp" data-time="$1">[$1]<\/a>/g;
 
                         my ($video_key) = $file =~ m{analysis/(.+)\.txt};
-                        my $video_url = $video_key ? "$video_key.mp4" : '';
+                        my $video_url = $video_key ? $video_mappings->{$video_key} : '';
                         push @{$results{$video_url}}, {
                             file => $file,
                             line_num => $line_num + 1,
@@ -92,7 +92,26 @@ __DATA__
         .suggested-search { cursor: pointer; color: blue; text-decoration: underline; margin-right: 10px; }
     </style>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://www.youtube.com/iframe_api"></script>
     <script>
+        var players = {};
+
+        function onYouTubeIframeAPIReady() {
+            $('.video-player iframe').each(function() {
+                var iframe = $(this);
+                var videoId = iframe.attr('id');
+                players[videoId] = new YT.Player(videoId, {
+                    events: {
+                        'onReady': onPlayerReady
+                    }
+                });
+            });
+        }
+
+        function onPlayerReady(event) {
+            // Player is ready
+        }
+
         $(document).ready(function() {
             $('#search-form').submit(function(e) {
                 e.preventDefault();
@@ -104,13 +123,11 @@ __DATA__
                     } else {
                         $.each(data, function(videoUrl, matches) {
                             if (videoUrl) {
-                                var videoElementId = 'video-' + videoUrl.replace(/[^a-zA-Z0-9]/g, '_');
+                                var videoId = videoUrl.split('v=')[1];
+                                var videoElementId = 'video-' + videoId;
                                 resultsHtml += '<div class="result">';
                                 resultsHtml += '<div class="video-player">';
-                                resultsHtml += '<video id="' + videoElementId + '" width="560" height="315" controls>';
-                                resultsHtml += '<source src="' + videoUrl + '" type="video/mp4">';
-                                resultsHtml += 'Your browser does not support the video tag.';
-                                resultsHtml += '</video>';
+                                resultsHtml += '<iframe id="' + videoElementId + '" width="560" height="315" src="https://www.youtube.com/embed/' + videoId + '?enablejsapi=1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>';
                                 resultsHtml += '</div>';
                                 matches.forEach(function(match) {
                                     resultsHtml += '<p>' + match.line + '</p>';
@@ -121,6 +138,9 @@ __DATA__
                     }
                     $('#results').html(resultsHtml);
 
+                    // Initialize YouTube players
+                    onYouTubeIframeAPIReady();
+
                     // Start playing the first video from the timestamp of the first result
                     if (Object.keys(data).length > 0) {
                         var firstVideoUrl = Object.keys(data)[0];
@@ -129,11 +149,12 @@ __DATA__
                         var minutes = parseInt(firstTimestamp.split(':')[0]);
                         var seconds = parseInt(firstTimestamp.split(':')[1]);
                         var totalSeconds = minutes * 60 + seconds;
-                        var firstVideoElementId = 'video-' + firstVideoUrl.replace(/[^a-zA-Z0-9]/g, '_');
-                        var firstVideo = document.getElementById(firstVideoElementId);
+                        var firstVideoId = firstVideoUrl.split('v=')[1];
+                        var firstVideoElementId = 'video-' + firstVideoId;
+                        var firstVideo = players[firstVideoElementId];
                         if (firstVideo) {
-                            firstVideo.currentTime = totalSeconds - 1;
-                            firstVideo.play();
+                            firstVideo.seekTo(totalSeconds, true);
+                            firstVideo.playVideo();
                         }
                     }
                 });
@@ -151,10 +172,12 @@ __DATA__
                 var minutes = parseInt(time.split(':')[0]);
                 var seconds = parseInt(time.split(':')[1]);
                 var totalSeconds = minutes * 60 + seconds;
-                var video = $(this).closest('.result').find('video')[0];
-                if (video) {
-                    video.currentTime = totalSeconds - 0.5;
-                    video.play();
+                var video = $(this).closest('.result').find('iframe')[0];
+                var videoId = video.id;
+                var player = players[videoId];
+                if (player) {
+                    player.seekTo(totalSeconds, true);
+                    player.playVideo();
                 }
             });
         });
