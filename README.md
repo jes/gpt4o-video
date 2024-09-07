@@ -12,15 +12,14 @@ https://www.youtube.com/watch?v=ahvqPh8dJ8s
 
 ### How to Use
 
-1. **Splitting the video into frames**
-   - Ensure that the video file is in the same directory.
-   - Run the `split-video` script to split the video into individual frames.
-     ```sh
-     ./split-video <input_video> <output_directory> [fps]
-     ```
-
-2. **Interacting with the Go program**
+1. **Interacting with the Go program**
    - Run the Go program to interact with the split frames.
      ```sh
-     go run .
+     go run . -video foo.mp4 -fps 1
+     ```
+
+2. **Non-interactive mode**
+   - Run the Go program to interact with the split frames.
+     ```sh
+     go run . -video foo.mp4 -fps 1 -prompt-file prompt.txt
      ```
